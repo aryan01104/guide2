@@ -1,0 +1,5 @@
+venv/
+data/
+.env
+activity_log_scored.csv
+.cache/
