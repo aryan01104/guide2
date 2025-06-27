@@ -146,20 +146,22 @@ def get_activities_by_date(date: datetime.date = None):
     finally:
         session.close()
 
-def get_recent_activities(hours_back: int = 2):
-    """Get recent activities within specified hours"""
+def get_recent_activities(hours_back: int = 2, only_unassigned: bool = True):
     from datetime import timedelta
-    
+
     session = get_db_session()
     try:
         cutoff = datetime.now() - timedelta(hours=hours_back)
-        activities = session.query(ActivityLog).filter(
+        q = session.query(ActivityLog).filter(
             ActivityLog.timestamp_start >= cutoff
-        ).order_by(ActivityLog.timestamp_start).all()
-        
+        )
+        if only_unassigned:
+            q = q.filter(ActivityLog.session_id == None)
+        activities = q.order_by(ActivityLog.timestamp_start).all()
         return activities
     finally:
         session.close()
+
 
 def get_custom_classification(activity_details: str):
     """Get custom classification for activity"""
@@ -254,26 +256,16 @@ def get_sessions_by_date(date: datetime.date = None):
         session.close()
 
 def get_session_activities(session_id: int):
-    """Get all activities that belong to a specific session"""
+    """Get all activities that belong to a specific session via explicit session_id FK."""
     session = get_db_session()
     try:
-        # Get the session first
-        activity_session = session.query(ActivitySession).filter(
-            ActivitySession.id == session_id
-        ).first()
-        
-        if not activity_session:
-            return []
-        
-        # Get activities within the session time range
         activities = session.query(ActivityLog).filter(
-            ActivityLog.timestamp_start >= activity_session.start_time,
-            ActivityLog.timestamp_start <= activity_session.end_time
+            ActivityLog.session_id == session_id
         ).order_by(ActivityLog.timestamp_start).all()
-        
         return activities
     finally:
         session.close()
+
 
 def get_pending_sessions():
     """Get sessions that need user confirmation"""
@@ -441,3 +433,24 @@ def add_custom_classification(activity, classification, productivity_score=None,
 if __name__ == "__main__":
     init_database()
     print("Database initialized successfully!")
+
+
+################
+
+def assign_session_to_activities(activity_ids, session_id):
+    """
+    Assigns the given session_id to all activities in activity_ids list.
+    Ensures every activity belongs to at most one session.
+    """
+    session = get_db_session()
+    try:
+        session.query(ActivityLog).filter(ActivityLog.id.in_(activity_ids)).update(
+            {"session_id": session_id}, synchronize_session=False
+        )
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"[DATABASE] Error assigning session_id: {e}")
+    finally:
+        session.close()
+

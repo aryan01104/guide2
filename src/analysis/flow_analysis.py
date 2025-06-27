@@ -7,9 +7,28 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
 import json
 
+gap_threshold_sec = 1800
+micro_break_threshold_sec = 300
+
 # ----------- Batch Sessionizing Code (NEW) ------------
 
 class ActivityLogStub:
+    """
+    Lightweight, in-memory representation of an activity log entry.
+
+    Used for batch processing, sessionizing, or analysis without hitting the DB repeatedly.
+
+    Attributes:
+        id (int): Unique activity ID from the DB.
+        timestamp_start (datetime): Start time of activity.
+        duration_sec (int): Duration in seconds.
+        productivity_score (Optional[int]): Productivity score, if classified.
+        details (str): Activity details (app, tab, etc.).
+
+    Properties:
+        end_time (datetime): Calculated end time (start + duration).
+    """
+
     def __init__(self, id, timestamp_start, duration_sec, productivity_score, details):
         self.id = id
         self.timestamp_start = timestamp_start
@@ -22,6 +41,9 @@ class ActivityLogStub:
         return self.timestamp_start + timedelta(seconds=self.duration_sec)
 
 def classify_type(prod_score):
+    """
+    small helper function which gives numerical scores productivity classification
+    """
     if prod_score is None:
         return "neutral"
     if prod_score >= 20:
@@ -31,8 +53,23 @@ def classify_type(prod_score):
     else:
         return "neutral"
 
-def batch_sessionize(activities, gap_threshold_sec=1800, micro_break_threshold_sec=300):
-    """Returns: list of sessions (list of activities)"""
+def batch_sessionize(activities, gap_threshold_sec=gap_threshold_sec, micro_break_threshold_sec=micro_break_threshold_sec):
+    """
+    Groups activities into contiguous sessions using time and type.
+
+    - Sorts activities chronologically.
+    - Starts a new session when:
+        - The gap between activities exceeds `gap_threshold_sec`, or
+        - The activity type changes (productive ↔ unproductive), unless the new 
+          activity is a short “micro-activity” (<= `micro_break_threshold_sec`) 
+          matching the original session type.
+    - Treats micro-activities as “blips” if they don’t indicate a real context 
+      switch.
+    - Returns: list of session-lists (each a group of activities).
+
+    Ensures sessions are logically grouped for true context, not fragmented by 
+    brief distractions.
+    """
     if not activities:
         return []
 

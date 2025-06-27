@@ -3,7 +3,7 @@
 Database models using SQLAlchemy
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey  
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
@@ -14,6 +14,7 @@ class ActivityLog(Base):
     __tablename__ = "activity_logs"
     
     id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("activity_sessions.id"), nullable=True, index=True)
     timestamp_start = Column(DateTime, nullable=False, index=True)
     event_type = Column(String(50), nullable=False)  # app_session or browser_tab_session
     details = Column(Text, nullable=False)

@@ -2,8 +2,8 @@ from flask import Flask, render_template, jsonify
 import sqlite3
 import os
 
+
 app = Flask(__name__)
-import os
 
 
 DB_PATH = 	os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'activity.db')
@@ -18,12 +18,11 @@ def get_sessions_with_activities():
     session_list = []
     for s in sessions:
         session_id = s['id']
-        # Fetch activities for this session. Assumes 'session_id' field exists in activity_logs.
+        # Fetch activities ONLY by session_id FK!
         activities = cur.execute(
-            'SELECT * FROM activity_logs WHERE event_type = ? ORDER BY timestamp_start',
-            (str(session_id),)
+            'SELECT * FROM activity_logs WHERE session_id = ? ORDER BY timestamp_start',
+            (session_id,)
         ).fetchall()
-        # Or adjust query above if your linking logic is different!
         activity_list = []
         for a in activities:
             activity_list.append({
@@ -44,6 +43,8 @@ def get_sessions_with_activities():
         })
     conn.close()
     return session_list
+
+
 
 @app.route('/')
 def index():
