@@ -12,6 +12,11 @@ from ..database.operations import save_activity_session
 from ..database.models import ActivityLog
 from .flow_analysis import FlowAwareAnalyzer
 
+# --- COMMENTARY/NOTIF imports ---
+from src.commentator import generate_transition_commentary
+from src.database.operations import add_commentary_to_session
+from src.notifications.manager import NotificationManager
+
 class RealTimeSessionGrouper:
     """Groups activities into sessions in real-time based on context switches"""
     
@@ -28,7 +33,11 @@ class RealTimeSessionGrouper:
         self.current_context = None  # 'productive', 'unproductive', 'neutral'
         self.context_start_time = None
         self.pending_activities = []
-        
+
+        # --- NEW: previous session storage for commentary ---
+        self.prev_session_meta = None
+        self.prev_activities = []
+
         # Flow analyzer for activity classification
         self.flow_analyzer = FlowAwareAnalyzer()
     
@@ -57,7 +66,7 @@ class RealTimeSessionGrouper:
             print(f"[REALTIME_SESSION] Context switch detected: {self.current_context} -> {activity_type}")
             print(f"[REALTIME_SESSION] Time in current context: {time_in_current_context}s")
             
-            if self.should_create_session(time_in_current_context, activity_type):
+            if self.should_create_session(time_in_context, activity_type):
                 # End current session and start new one
                 print(f"[REALTIME_SESSION] Creating session boundary")
                 self.finalize_current_session()
@@ -107,6 +116,25 @@ class RealTimeSessionGrouper:
     
     def start_new_session(self, activity: ActivityLog, activity_type: str):
         """Start a new activity session"""
+
+        # --- Store old session for commentary ---
+        prev_session_meta = None
+        prev_activities = []
+        if self.current_session:
+            prev_session_meta = {
+                "dominant_type": self.current_session.get("dominant_type", "unknown"),
+                "start_time": self.current_session.get("start_time"),
+                "duration": sum(a.duration_sec for a in self.current_session.get("activities", [])),
+                "session_type": self.current_context
+            }
+            prev_activities = list(self.current_session.get("activities", []))
+        else:
+            prev_session_meta = None
+            prev_activities = []
+
+        self.prev_session_meta = prev_session_meta
+        self.prev_activities = prev_activities
+
         self.current_session = {
             'activities': [activity],
             'start_time': activity.timestamp_start,
@@ -127,7 +155,57 @@ class RealTimeSessionGrouper:
                                      if self.classify_activity(a) != activity_type]
         
         print(f"[REALTIME_SESSION] Started new {activity_type} session")
-    
+        
+        ### --- COMMENTARY LOGIC ADDED BELOW ---
+        # Only generate commentary if there was a previous session
+        if self.prev_session_meta or self.prev_activities:
+            # Save new session now to DB to get new_session_id
+            total_duration = sum(a.duration_sec for a in self.current_session['activities'])
+            end_time = self.current_session['activities'][-1].timestamp_start + timedelta(
+                seconds=self.current_session['activities'][-1].duration_sec)
+            session_score = self.calculate_session_score(self.current_session['activities'])
+            session_name = self.generate_session_name(self.current_session['activities'], activity_type)
+
+            # Save session to DB
+            new_session_id = save_activity_session(
+                session_name=session_name,
+                productivity_score=session_score,
+                start_time=self.current_session['start_time'],
+                end_time=end_time,
+                total_duration_sec=total_duration,
+                user_confirmed=False
+            )
+
+            # Prepare new session meta/activities
+            new_session_meta = {
+                "dominant_type": activity_type,
+                "start_time": self.current_session['start_time'],
+                "duration": total_duration,
+                "session_type": activity_type
+            }
+            new_activities = list(self.current_session['activities'])
+
+            # 1. Generate commentary
+            commentary = generate_transition_commentary(
+                self.prev_session_meta, self.prev_activities,
+                new_session_meta, new_activities
+            )
+
+            # 2. Store commentary in DB
+            add_commentary_to_session(new_session_id, commentary, datetime.now())
+
+            # 3. Notify user (short version)
+            notif = NotificationManager()
+            notif.send_macos_notification(
+                "Session Reflection",
+                commentary[:200].replace('\n', ' ')
+            )
+
+            # Reset previous session info
+            self.prev_session_meta = None
+            self.prev_activities = []
+        ### --- END COMMENTARY LOGIC ---
+
     def add_to_current_session(self, activity: ActivityLog):
         """Add activity to current session"""
         if self.current_session:
@@ -278,3 +356,4 @@ class RealTimeSessionGrouper:
         if self.current_session:
             print("[REALTIME_SESSION] Force finalizing current session")
             self.finalize_current_session()
+

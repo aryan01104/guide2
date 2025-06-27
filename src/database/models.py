@@ -56,6 +56,8 @@ class ActivitySession(Base):
     start_time = Column(DateTime, nullable=False, index=True)
     end_time = Column(DateTime, nullable=False)
     total_duration_sec = Column(Integer, nullable=False)
+    commentary = Column(Text, nullable=True)
+    commentary_time = Column(DateTime, nullable=True)
     user_confirmed = Column(Boolean, default=False)  # User approved this score
     created_at = Column(DateTime, default=datetime.utcnow)
 

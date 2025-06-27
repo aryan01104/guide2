@@ -454,3 +454,15 @@ def assign_session_to_activities(activity_ids, session_id):
     finally:
         session.close()
 
+def add_commentary_to_session(session_id, commentary, commentary_time):
+    session = get_db_session()
+    try:
+        sess = session.query(ActivitySession).filter(ActivitySession.id == session_id).first()
+        if sess:
+            sess.commentary = commentary
+            sess.commentary_time = commentary_time
+            session.commit()
+    finally:
+        session.close()
+
+

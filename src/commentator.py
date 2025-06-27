@@ -1,39 +1,55 @@
-from .user_config import load_user_config
 from .llm_client import chat, PERSONA_DIGEST
-from .config import COMMENT_STYLE
 
-SYSTEM_COMMENTARY_INSTRUCTION = """
-You are a productivity commentator for a highly motivated, analytically-minded user.
-Base your commentary on the specific time allocation data provided.
-- Connect activities to the user's stated main goal, side interests, and philosophical values.
-- If there are moments of distraction or switching to less-productive activities, reflect on why that might have happened (e.g., avoidance, curiosity, frustration), using concepts like “bad faith” or “authentic engagement.”
-- Give one clear, actionable suggestion for the next session—something concrete the user can do.
-- Finish with a targeted reflective question about the user's choices today.
-Avoid generic praise and vague statements. Analyze, synthesize, and offer actionable next steps with philosophical reflection.
-""" + PERSONA_DIGEST + "\n\n" + COMMENT_STYLE
+def generate_transition_commentary(
+    prev_session_meta,
+    prev_activities,
+    new_session_meta,
+    new_activities,
+    persona_digest=PERSONA_DIGEST,
+    user_traits=None
+):
+    """
+    Generates a context-aware philosophical commentary on session transitions.
 
-def comment(summary):
-    config = load_user_config()
-    bullets = ""
-    for lens, total, acts in summary:
-        acts_str = ", ".join(f"{a} ({int(m)}m)" for a, m in acts)
-        bullets += f"• {lens} ({int(total)} min): {acts_str}\n"
+    prev_session_meta: dict with info about previous session (or None if none).
+    prev_activities: list of activities from previous session.
+    new_session_meta: dict with info about new session.
+    new_activities: list of activities from new session.
+    persona_digest: the book-extracted value system.
+    user_traits: optional, dict with user traits or behavior patterns.
+    """
+    # Summarize previous and new contexts for the prompt
+    def summarize(meta, acts):
+        if not meta:
+            return "No prior session (blank context)."
+        activity_str = ", ".join(f"{a.details} ({a.duration_sec // 60}m)" for a in acts[:3])
+        return f"Session type: {meta.get('session_type', 'unknown')} | Activities: {activity_str or 'none'} | Duration: {meta.get('duration', 0) // 60} min"
 
-    user_msg = (
-        f"User profile: {config['profession']} working on {config['main_goal']}.\n"
-        f"Side interests: {config['side_aims']}.\n"
-        f"Breaks: {', '.join(config['break_activities'])}.\n"
-        "Last 2-hour breakdown of your time:\n"
-        f"{bullets.strip()}"
+    prev_summary = summarize(prev_session_meta, prev_activities) if prev_session_meta else "No previous session."
+    new_summary = summarize(new_session_meta, new_activities)
+
+    # (Optional) User traits/notes
+    user_traits_note = ""
+    if user_traits:
+        user_traits_note = "User traits: " + ", ".join(f"{k}: {v}" for k, v in user_traits.items())
+
+    # Main prompt construction
+    prompt = (
+        "You are a philosophical productivity commentator. Your worldview, language, and judgements must be deeply shaped by the following value system:\n"
+        f"{persona_digest}\n\n"
+        "Your task: When a user transitions between two contexts (such as from an unproductive session to a productive session, or vice versa), you must:\n"
+        "- Briefly describe the prior context.\n"
+        "- Note what has changed in the new context.\n"
+        "- Offer an observation, critique, or praise based on the book's core values and tone. Use signature terms, attitudes, and personality from the persona digest.\n"
+        "- If improvement: Reinforce with lessons/terms from the book.\n"
+        "- If backslide: Call out avoidance, rationalization, or whatever the book would condemn. Be honest, not encouraging for its own sake.\n"
+        "- End with one actionable challenge, framed in the author’s style, for the user to carry forward.\n"
+        "- Avoid generic praise or empty motivational language. Make every sentence reflect the book’s philosophy.\n"
+        f"{user_traits_note}\n\n"
+        f"---\nPrevious session:\n{prev_summary}\n\nNew session:\n{new_summary}\n---"
     )
 
-    print("[COMMENTATOR] Generating commentary with user context and activities.")
-    resp = chat(
-        [
-            {"role": "system", "content": SYSTEM_COMMENTARY_INSTRUCTION},
-            {"role": "user", "content": user_msg}
-        ],
-        temperature=0.6
-    )
-    print("[COMMENTATOR] Commentary generated.")
+    resp = chat([
+        {"role": "system", "content": prompt}
+    ], temperature=0.6)
     return resp.choices[0].message.content.strip()
