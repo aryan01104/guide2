@@ -465,4 +465,104 @@ def add_commentary_to_session(session_id, commentary, commentary_time):
     finally:
         session.close()
 
+def find_smart_sessionization_ranges():
+    """
+    Find time ranges using existing session boundaries as natural buffers.
+    Returns list of (start_time, end_time) tuples for efficient processing.
+    """
+    from datetime import timedelta
+    
+    session = get_db_session()
+    try:
+        # Get unsessionized activity gaps
+        unsessionized = session.query(ActivityLog).filter(
+            ActivityLog.session_id == None,
+            ActivityLog.duration_sec > 0
+        ).order_by(ActivityLog.timestamp_start).all()
+        
+        if not unsessionized:
+            return []
+        
+        ranges = []
+        one_day = timedelta(days=1)
+        fallback_buffer = timedelta(hours=2)
+        
+        # Group consecutive unsessionized activities
+        current_gap_start = unsessionized[0].timestamp_start
+        prev_timestamp = unsessionized[0].timestamp_start
+        
+        for i, activity in enumerate(unsessionized[1:], 1):
+            time_gap = (activity.timestamp_start - prev_timestamp).total_seconds()
+            
+            if time_gap > 1800:  # 30min gap = separate processing range
+                # Process current gap
+                gap_end = prev_timestamp + timedelta(seconds=unsessionized[i-1].duration_sec)
+                process_range = calculate_processing_bounds(session, current_gap_start, gap_end, one_day, fallback_buffer)
+                ranges.append(process_range)
+                
+                # Start new gap
+                current_gap_start = activity.timestamp_start
+            
+            prev_timestamp = activity.timestamp_start
+        
+        # Process final gap
+        final_gap_end = unsessionized[-1].timestamp_start + timedelta(seconds=unsessionized[-1].duration_sec)
+        final_range = calculate_processing_bounds(session, current_gap_start, final_gap_end, one_day, fallback_buffer)
+        ranges.append(final_range)
+        
+        return ranges
+    finally:
+        session.close()
+
+def calculate_processing_bounds(session, gap_start, gap_end, one_day, fallback_buffer):
+    """Calculate smart processing boundaries for a gap"""
+    
+    # Find last session ending before gap_start (within 1 day)
+    boundary_start = session.query(ActivitySession.end_time).filter(
+        ActivitySession.end_time <= gap_start,
+        ActivitySession.end_time >= gap_start - one_day
+    ).order_by(ActivitySession.end_time.desc()).first()
+    
+    if boundary_start:
+        process_start = boundary_start[0]  # Use session end_time
+    else:
+        process_start = gap_start - fallback_buffer  # Fallback to 2hr buffer
+    
+    # Find first session starting after gap_end (within 1 day)  
+    boundary_end = session.query(ActivitySession.start_time).filter(
+        ActivitySession.start_time >= gap_end,
+        ActivitySession.start_time <= gap_end + one_day
+    ).order_by(ActivitySession.start_time.asc()).first()
+    
+    if boundary_end:
+        process_end = boundary_end[0]  # Use session start_time
+    else:
+        process_end = gap_end + fallback_buffer  # Fallback to 2hr buffer
+    
+    return (process_start, process_end)
+
+def fetch_activities_in_time_range(start_time, end_time):
+    """Fetch activities within time range for bounded sessionization"""
+    session = get_db_session()
+    try:
+        activities = session.query(ActivityLog).filter(
+            ActivityLog.timestamp_start >= start_time,
+            ActivityLog.timestamp_start <= end_time,
+            ActivityLog.duration_sec > 0
+        ).order_by(ActivityLog.timestamp_start).all()
+        
+        from .models import ActivityLog as ActivityLogModel
+        from ..analysis.flow_analysis import ActivityLogStub
+        
+        return [ActivityLogStub(
+            id=row.id,
+            timestamp_start=row.timestamp_start,
+            duration_sec=row.duration_sec,
+            productivity_score=row.productivity_score,
+            details=row.details,
+            session_id=row.session_id,
+        ) for row in activities]
+    finally:
+        session.close()
+
 

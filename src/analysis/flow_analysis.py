@@ -29,12 +29,13 @@ class ActivityLogStub:
         end_time (datetime): Calculated end time (start + duration).
     """
 
-    def __init__(self, id, timestamp_start, duration_sec, productivity_score, details):
+    def __init__(self, id, timestamp_start, duration_sec, productivity_score, details, session_id=None):
         self.id = id
         self.timestamp_start = timestamp_start
         self.duration_sec = duration_sec
         self.productivity_score = productivity_score
         self.details = details
+        self.session_id = session_id
 
     @property
     def end_time(self):

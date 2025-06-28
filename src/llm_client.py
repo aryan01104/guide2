@@ -3,7 +3,7 @@
 
 import openai          # OpenAI Python SDK for API calls
 import json            # For processing JSON payloads
-from .config import OPENAI_KEY, MODEL, ROOT  # Project-specific settings
+from config import OPENAI_KEY, MODEL, ROOT  # Project-specific settings
 
 # ─── API Key Configuration ──────────────────────────────────────────────────
 # Set the OpenAI API key for authentication

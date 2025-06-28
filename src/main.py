@@ -9,7 +9,7 @@ from datetime import datetime
 
 from .core.logger import start_logging
 from .core.scheduler import start as start_basic_scheduler
-from .analysis.pattern_recognition import analyze_and_group_activities
+from .analysis.pattern_recognition import analyze_and_group_activities_bounded
 from .notifications.manager import NotificationManager
 from .database.operations import init_database
 
@@ -30,7 +30,7 @@ class SmartScheduler:
         
         try:
             # Analyze and group recent activities
-            session_results = analyze_and_group_activities()
+            session_results = analyze_and_group_activities_bounded()
             
             # Check for sessions that need user input
             needs_classification = [
@@ -99,6 +99,10 @@ def main():
     
     # Setup user configuration
     setup_user_config()
+    
+    # Process any existing unsessionized activities
+    print("[MAIN] Processing existing activity logs...")
+    analyze_and_group_activities_bounded()
     
     # Start activity logging
     logger_thread = start_logging()

@@ -1,5 +1,6 @@
 from .llm_client import chat, PERSONA_DIGEST
 
+
 def generate_transition_commentary(
     prev_session_meta,
     prev_activities,
@@ -18,6 +19,10 @@ def generate_transition_commentary(
     persona_digest: the book-extracted value system.
     user_traits: optional, dict with user traits or behavior patterns.
     """
+
+    # --- EARLY EXIT for empty previous session ---
+    if (not prev_session_meta and not prev_activities):
+        return ""
     # Summarize previous and new contexts for the prompt
     def summarize(meta, acts):
         if not meta:
