@@ -3,8 +3,8 @@
 Standalone script to run the web server
 """
 
-import sys
 import pathlib
+import sys
 
 # Add project root to path for imports
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))

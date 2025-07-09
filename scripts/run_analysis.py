@@ -3,8 +3,8 @@
 Standalone script to run pattern analysis
 """
 
-import sys
 import pathlib
+import sys
 
 # Add project root to path for imports
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
@@ -22,4 +22,3 @@ if __name__ == "__main__":
     for i, session in enumerate(results, 1):
         duration_min = sum(a.duration_sec for a in session) // 60
         print(f"  • Session {i}: {len(session)} activities, {duration_min} min")
-

@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 # ─── Thin Chat Completions Wrapper ───────────────────────────────────────────
 
-import openai          # OpenAI Python SDK for API calls
-import json            # For processing JSON payloads
-from config import OPENAI_KEY, MODEL, ROOT  # Project-specific settings
+import json  # For processing JSON payloads
+
+import openai  # OpenAI Python SDK for API calls
+
+from config import MODEL, OPENAI_KEY, ROOT  # Project-specific settings
 
 # ─── API Key Configuration ──────────────────────────────────────────────────
 # Set the OpenAI API key for authentication
@@ -31,8 +33,8 @@ def chat(messages, *, fmt=None, temperature=0):
 
     # Call the Chat Completions API
     return openai.chat.completions.create(
-        model=MODEL,              # which model to use (e.g., "gpt-4")
-        messages=messages,        # the conversation messages
+        model=MODEL,  # which model to use (e.g., "gpt-4")
+        messages=messages,  # the conversation messages
         temperature=temperature,  # randomness control
         response_format=response_format,
     )

@@ -1,7 +1,9 @@
 import csv
 import json
-from .user_config import load_user_config, update_custom_classification
+
 from .llm_client import chat
+from .user_config import load_user_config, update_custom_classification
+
 
 def classify_activities(rows):
     config = load_user_config()
@@ -40,35 +42,47 @@ Examples:
 - "Gmail | inbox management" → {{"classification": "neutral", "confidence": 80, "reasoning": "Necessary admin task"}}"""
 
             user_prompt = f"Classify this activity: {det}"
-            resp = chat([{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}], temperature=0)
-            
+            resp = chat(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0,
+            )
+
             # Parse JSON response safely
             try:
                 result = json.loads(resp.choices[0].message.content.strip())
-                category = result['classification']
-                confidence = result.get('confidence', 50)
-                reasoning = result.get('reasoning', 'No reasoning provided')
-                
+                category = result["classification"]
+                confidence = result.get("confidence", 50)
+                reasoning = result.get("reasoning", "No reasoning provided")
+
                 # Add to unknowns if confidence is low
                 if confidence < 75:
                     unknowns.append(det)
-                    
-                print(f"[CLASSIFIER] Activity: '{det}' classified as: {category} (confidence: {confidence}%, reasoning: {reasoning})")
-                
+
+                print(
+                    f"[CLASSIFIER] Activity: '{det}' classified as: {category} (confidence: {confidence}%, reasoning: {reasoning})"
+                )
+
             except (json.JSONDecodeError, KeyError) as e:
                 # Fallback for malformed responses
-                category = 'neutral'
+                category = "neutral"
                 confidence = 30
-                print(f"[CLASSIFIER] Failed to parse LLM response for '{det}': {e}. Using neutral classification.")
+                print(
+                    f"[CLASSIFIER] Failed to parse LLM response for '{det}': {e}. Using neutral classification."
+                )
                 unknowns.append(det)
         r["category"] = category
         results.append(r)
     return results, unknowns
 
+
 def write_classified_log(rows, path):
-    if not rows: return
+    if not rows:
+        return
     fieldnames = list(rows[0].keys())
-    with open(path, "w", newline='', encoding='utf-8') as f:
+    with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(rows)

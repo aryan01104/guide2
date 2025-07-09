@@ -1,9 +1,12 @@
-import openai
 import pathlib
+
+import openai
 import PyPDF2
-from config import OPENAI_KEY, MODEL
+
+from config import MODEL, OPENAI_KEY
 
 openai.api_key = OPENAI_KEY
+
 
 def pdf_to_text(pdf_path):
     text = ""
@@ -13,7 +16,10 @@ def pdf_to_text(pdf_path):
             text += page.extract_text() or ""
     return text
 
-def extract_digest_from_book(book_text: str, philosopher_name: str, book_title: str) -> str:
+
+def extract_digest_from_book(
+    book_text: str, philosopher_name: str, book_title: str
+) -> str:
     prompt = f"""
 You are an expert in extracting practical wisdom from philosophical texts for the purpose of productivity, focus, and meaningful work.
 Given the book "{book_title}" by {philosopher_name}, extract the following, with particular emphasis on lessons that guide behavior towards or away from authentic, productive work:
@@ -30,22 +36,34 @@ Return all of the above as a single JSON object for use in a digital productivit
     response = openai.chat.completions.create(
         model=MODEL,
         messages=[
-            {"role": "system", "content": "You help people apply philosophy to practical behavior analysis."},
-            {"role": "user", "content": prompt + "\n\n[BOOK START]\n" + book_text[:5000] + "\n[BOOK END]\n"}
+            {
+                "role": "system",
+                "content": "You help people apply philosophy to practical behavior analysis.",
+            },
+            {
+                "role": "user",
+                "content": prompt
+                + "\n\n[BOOK START]\n"
+                + book_text[:5000]
+                + "\n[BOOK END]\n",
+            },
         ],
         temperature=0.2,
     )
 
     return response.choices[0].message.content.strip()
 
+
 if __name__ == "__main__":
     # Example: resources/bad_faith.pdf
     philosopher = "Nietzsche"
     book = "GM"
     pdf_path = pathlib.Path(__file__).parent.parent / "resources" / "GM.pdf"
-    digest_path = pathlib.Path(__file__).parent.parent / "resources" / "persona_digest.txt"
-    
+    digest_path = (
+        pathlib.Path(__file__).parent.parent / "resources" / "persona_digest.txt"
+    )
+
     text = pdf_to_text(pdf_path)
     digest = extract_digest_from_book(text, philosopher, book)
-    digest_path.write_text(digest, encoding='utf-8')
+    digest_path.write_text(digest, encoding="utf-8")
     print(f"Persona digest written to: {digest_path}")

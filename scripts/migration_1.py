@@ -1,5 +1,5 @@
-import sqlite3
 import pathlib
+import sqlite3
 
 db_path = pathlib.Path(__file__).parent.parent / "data" / "activity.db"
 conn = sqlite3.connect(db_path)
