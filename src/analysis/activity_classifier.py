@@ -18,13 +18,13 @@ class ActivityClassifier:
     def __init__(self):
         # Research-based thresholds
         self.dominance_ratio = 0.75  # 75% rule for session classification
-        self.secs4flow = 15*60
-        self.secs4break = 240  
+        self.secs4flow = 15 * 60
+        self.secs4break = 240
 
     def classify_activity_type(self, activity) -> str:
         """Classify individual activity using smart LLM classification"""
         # Use existing score if available and user-confirmed
-        if ( # the activity has a productivity score and is user_confirmed
+        if (  # the activity has a productivity score and is user_confirmed
             hasattr(activity, "productivity_score")
             and activity.productivity_score is not None
             and hasattr(activity, "user_confirmed")

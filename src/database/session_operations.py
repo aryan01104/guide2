@@ -7,8 +7,6 @@ Session-related database operations
 from datetime import datetime, timedelta
 from typing import List
 
-from .operations import save_activity_session
-
 import json
 from ..llm_client import chat
 
@@ -152,9 +150,6 @@ def save_session(activities: List[ActivityLog]) -> int:
         except Exception as e:
             print(f"[SESSION_PERSISTENCE] ❌ Error in creating-cum-saving session: {e}")
             return None
-
-
-
 
 def get_sessions_by_date(date: datetime.date = None):
     """Get all sessions for a specific date"""

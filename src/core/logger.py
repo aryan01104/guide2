@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""
-Activity logging core module
-Tracks window/app changes and logs to database
-"""
+""" Activity logging core module: polls every POLL_SEC seconds and logs each interval to the database. """
 
 import datetime as dt
 import threading
@@ -10,21 +7,16 @@ import time
 from typing import Tuple
 
 from ..analysis.realtime_session_grouper import RealTimeSessionGrouper
-from ..database.operations import (add_activity_log, init_database,
-                                   update_activity_scores)
+from ..database.operations import add_activity_log, init_database, update_activity_scores
 
-POLL_SEC: int = 10
-
-
-def _now_iso() -> str:
-    return dt.datetime.now().isoformat(timespec="seconds")
+POLL_SEC: int = 10  # Poll interval in seconds
 
 
 def _get_active() -> Tuple[str, str]:
     """
     Returns (event, details)
       event   = "app_session" or "browser_tab_session"
-      details = window title  OR  "<tab title>|<url>"
+      details = window title OR "<tab title>|<url>"
     """
     try:
         from pygetwindow import getActiveWindow
@@ -37,92 +29,89 @@ def _get_active() -> Tuple[str, str]:
         return ("app_session", "Unknown")
 
     if "Chrome" in title:
-        tab_title, url = _get_chrome_tab()
-        return ("browser_tab_session", f"|{tab_title}|{url}")
-    return ("app_session", f"|{title}")
+        from subprocess import check_output
 
+        script = (
+            'tell application "Google Chrome"\n'
+            '  if not (exists window 1) then return "Unknown||Unknown"\n'
+            '  set t to title of active tab of front window\n'
+            '  set u to URL of active tab of front window\n'
+            '  return t & "||" & u\n'
+            'end tell'
+        )
+        try:
+            out = check_output(["osascript", "-e", script])
+            tab_title, url = out.decode().strip().split("||", 1)
+            return ("browser_tab_session", f"{tab_title}|{url}")
+        except Exception:
+            return ("browser_tab_session", "Unknown|Unknown")
 
-def _get_chrome_tab() -> Tuple[str, str]:
-    script = (
-        'tell application "Google Chrome"\n'
-        '  if not (exists window 1) then return "Unknown||Unknown"\n'
-        "  set t to title of active tab of front window\n"
-        "  set u to URL of active tab of front window\n"
-        '  return t & "||" & u\n'
-        "end tell"
-    )
-    try:
-        import platform
-        import subprocess
-
-        if platform.system() != "Darwin":
-            raise RuntimeError("Not macOS")
-        out = subprocess.check_output(["osascript", "-e", script])
-        return out.decode().strip().split("||", 1)
-    except Exception:
-        return ("Unknown", "Unknown")
+    return ("app_session", title)
 
 
 def start_logging():
-    """Start activity logging in background thread"""
+    """Start activity logging in a background thread."""
 
     def _thread():
         print("[LOGGER] Logger thread started!")
         try:
             # Initialize database
             init_database()
-            print("[LOGGER] Logger started and running.")
+            print("[LOGGER] Database initialized.")
 
             # Initialize real-time session grouper
             session_grouper = RealTimeSessionGrouper()
-            print("[LOGGER] Real-time session grouper initialized")
+            print("[LOGGER] Session grouper initialized.")
 
+            # Seed previous state
             prev_event, prev_details = _get_active()
             start_ts = time.time()
 
             while True:
                 time.sleep(POLL_SEC)
+
+                # Always log every POLL_SEC interval
                 cur_event, cur_details = _get_active()
-                if (cur_event, cur_details) != (prev_event, prev_details):
-                    duration = int(time.time() - start_ts)
-                    timestamp = dt.datetime.now()
+                duration = int(time.time() - start_ts)
+                timestamp = dt.datetime.now()
 
-                    # Log to database (initially without scores)
-                    activity = add_activity_log(
-                        timestamp_start=timestamp,
-                        event_type=prev_event,
-                        details=prev_details,
-                        duration_sec=duration,
-                    )
+                # Log to database
+                activity = add_activity_log(
+                    timestamp_start=timestamp,
+                    event_type=cur_event,
+                    details=cur_details,
+                    duration_sec=duration,
+                )
 
-                    print(
-                        f"[LOGGER] Logged: event={prev_event}, details={prev_details}, duration={duration}s"
-                    )
+                print(
+                    f"[LOGGER] Logged: event={cur_event}, details={cur_details}, duration={duration}s"
+                )
 
-                    # Process with real-time session grouper (this will trigger classification and scoring)
-                    if activity:
-                        try:
-                            session_grouper.on_new_activity(activity)
+                # Process with real-time session grouper
+                if activity:
+                    try:
+                        session_grouper.on_new_activity(activity)
 
-                            # Update activity in database with scores if they were set during classification
-                            if (
-                                hasattr(activity, "productivity_score")
-                                and activity.productivity_score is not None
-                            ):
-                                update_activity_scores(
-                                    activity.id,
-                                    activity.productivity_score,
-                                    getattr(activity, "confidence_score", None),
-                                    getattr(activity, "classification_text", None),
-                                )
-                        except Exception as e:
-                            print(f"[LOGGER] Error in session grouper: {e}")
+                        # Update DB with classification scores if set
+                        if (
+                            hasattr(activity, "productivity_score")
+                            and activity.productivity_score is not None
+                        ):
+                            update_activity_scores(
+                                activity.id,
+                                activity.productivity_score,
+                                getattr(activity, "confidence_score", None),
+                                getattr(activity, "classification_text", None),
+                            )
+                    except Exception as e:
+                        print(f"[LOGGER] Error in session grouper: {e}")
 
-                    prev_event, prev_details = cur_event, cur_details
-                    start_ts = time.time()
+                # Reset for next interval
+                prev_event, prev_details = cur_event, cur_details
+                start_ts = time.time()
         except Exception as e:
             print(f"[LOGGER] Exception in logger thread: {e}")
 
-    th = threading.Thread(target=_thread, daemon=True)
-    th.start()
-    return th
+    thread = threading.Thread(target=_thread, daemon=True)
+    thread.start()
+    return thread

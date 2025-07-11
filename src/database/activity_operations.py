@@ -1,6 +1,19 @@
 #!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Activity log database operations
+
+Functions:
+    - add_activity_log: Insert a new ActivityLog entry into the database.
+    - update_activity_scores: Update an activity’s productivity scores and 
+        recalculate session metrics.
+    - get_activities_by_date: Retrieve all ActivityLog entries for a given date.
+    - get_recent_activities: Fetch recent ActivityLog entries within the last 
+        N hours, optionally only unassigned.
+    - assign_session_to_activities: Bulk‐assign a session_id to a list of 
+        ActivityLog records.
+    - fetch_activities_in_time_range: Load activities in a time window and wrap 
+        them as ActivityLogStub objects.
 """
 
 from datetime import datetime, timedelta
@@ -20,6 +33,7 @@ def add_activity_log(
     classification_text: str = None,
 ):
     """Add new activity log entry"""
+    
     session = get_db_session()
     try:
         log_entry = ActivityLog(

@@ -17,7 +17,6 @@ from .session_operations import (add_commentary_to_session,
                                  get_pending_sessions, get_session_activities,
                                  get_sessions_by_date,
                                  recalculate_session_scores_for_activity,
-                                 save_activity_session,
                                  update_session_classification)
 from .user_config_operations import (add_custom_classification,
                                      add_custom_classification_with_score,

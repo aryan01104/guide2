@@ -7,7 +7,6 @@ import threading
 import time
 from datetime import datetime
 
-from .analysis.pattern_recognition import sessionize_orphan_logs
 from .core.logger import start_logging
 from .core.scheduler import start as start_basic_scheduler
 from .database.operations import init_database
@@ -25,46 +24,13 @@ class SmartScheduler:
         self.running = False
 
     def run_analysis_cycle(self):
-        """Run one cycle of activity analysis and notifications"""
-        print(
-            f"[SMART_SCHEDULER] Running analysis cycle at {datetime.now().strftime('%H:%M:%S')}"
-        )
-
+        """Run one cycle of pending-session prompts"""
+        print(f"[SMART_SCHEDULER] Checking at {datetime.now().strftime('%H:%M:%S')}")
         try:
-            # Analyze and group recent activities
-            session_results = sessionize_orphan_logs()
-
-            # Check for sessions that need user input
-            needs_classification = [
-                result
-                for result in session_results
-                if not result["auto_classified"] and result["confidence"] < 75
-            ]
-
-            if needs_classification:
-                print(
-                    f"[SMART_SCHEDULER] Found {len(needs_classification)} sessions needing user input"
-                )
-
-                # Send notifications for unclear sessions
-                for result in needs_classification:
-                    duration_min = (
-                        sum(a.duration_sec for a in result["activities"]) // 60
-                    )
-                    self.notification_manager.send_macos_notification(
-                        "Activity Classification Needed",
-                        f"Session: {result['session_name']} ({duration_min}min)",
-                    )
-
-                # Wait a bit, then prompt for classification
-                time.sleep(5)  # Give user time to see notification
-                self.notification_manager.check_and_prompt_pending_sessions()
-
-            else:
-                print("[SMART_SCHEDULER] All sessions auto-classified successfully")
-
+            self.notification_manager.check_and_prompt_pending_sessions()
         except Exception as e:
-            print(f"[SMART_SCHEDULER] Error in analysis cycle: {e}")
+            print(f"[SMART_SCHEDULER] Error during classification check: {e}")
+
 
     def start_scheduler(self):
         """Start the smart scheduler in a background thread"""
@@ -106,10 +72,6 @@ def main():
     init_database()
     # Setup user configuration
     setup_user_config()
-
-    # Process any existing unsessionized activities before logging
-    print("[MAIN] sessionizing orphan logs")
-    sessionize_orphan_logs()
 
     # Start activity logging
     logger_thread = start_logging()

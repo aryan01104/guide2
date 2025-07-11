@@ -9,7 +9,8 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from ..database.models import ActivityLog
-from ..database.operations import save_activity_session
+from ..database.activity_operations import fetch_activities_in_time_range
+from ..database.session_operations import save_session
 
 
 class SessionState:
@@ -127,21 +128,10 @@ class SessionState:
 
     def _end_session(self, end_time: datetime):
         """Finalize and persist the current session."""
-        acts = self.current_session["activities"]
-        start = self.current_session["start_time"]
-        total_dur = sum(a.duration_sec for a in acts)
-        score = round(
-            sum(a.productivity_score * a.duration_sec for a in acts) / total_dur
-        )
 
-        session_id = save_activity_session(
-            session_name="(AI will name later)",
-            productivity_score=score,
-            start_time=start,
-            end_time=end_time,
-            total_duration_sec=total_dur,
-            user_confirmed=False,
-        )
+        acts = self.current_session["activities"]
+        session_id = save_session(acts)
+
         print(f"[SessionState] ⏹️  Session {session_id} ended at {end_time}")
 
         # reset all state
